@@ -1,0 +1,13 @@
+version: "3.9"
+services:
+  url_shortener:
+    container_name: url_shortener
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: python -u app.py
+    ports:
+      - ${FLASK_PORT}:${FLASK_PORT}
+    volumes:
+      - .:/url_shortener
+    
