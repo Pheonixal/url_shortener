@@ -1,4 +1,27 @@
-<form method = "POST">
-    <p>HTTP Address <input type = "text" name = "http_address" /></p>
-    <p><input type = "submit" value = "submit" /></p>
-</form>
+<!DOCTYPE html>
+<html>
+<head>
+    <title>URL Shortener</title>
+    <script src="{{ url_for('static', filename='copy.js') }}"></script>
+</head>
+<body>
+    <h1>URL Shortener</h1>
+    <form method="POST">
+        <input type="text" name="long_url" placeholder="Enter a URL" required>
+        <button type="submit">Generate</button>
+    </form>
+    {% if short_url %}
+        <!-- <p>
+            Short URL: <a id="short_url" href="{{ short_url }}">{{ short_url }}</a>
+            <button onclick="copyToClipboard()">Copy URL</button>
+        </p> -->
+        <p>Short URL: <input type="text" id="short-url" value="{{ short_url }}" readonly>
+            <button onclick="copyToClipboard()">Copy URL</button>
+        </p>
+    {% endif %}
+    
+    {% if msg %}
+        <p>{{ msg }}</p>
+    {% endif %}
+</body>
+</html>

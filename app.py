@@ -1,12 +1,31 @@
 import flask
-import requests
 import random
 from urllib.parse import urlparse
 import string
 import sqlite3 as sql
 
-
 app = flask.Flask(__name__)
+app.config['DATABASE'] = 'database.db'
+
+
+def get_db():
+    db = getattr(flask.g, '_database', None)
+    if db is None:
+        db = sql.connect(app.config['DATABASE'], check_same_thread=False)
+        db.execute("""
+        CREATE TABLE IF NOT EXISTS urls (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, 
+            short_url TEXT, 
+            long_url TEXT
+            )""")
+        flask.g._database = db
+    return db
+    
+
+def close_db(exception=None):
+    db = getattr(flask.g, '_database', None)
+    if db is not None:
+        db.close()
 
 
 def uri_validator(url):
@@ -18,69 +37,48 @@ def uri_validator(url):
         return False
 
 
-def get_random_string(length):
+def get_random_string():
     """Generate random string of English lower and upper letters of given length"""
-    result_str = "".join(random.choice(string.ascii_letters) for i in range(length))
-    return result_str
+    characters = string.ascii_letters + string.digits
+    random_str = "".join(random.choice(characters) for i in range(8))
+    return random_str
 
 
-@app.route("/")
-def hello_world():
-    return flask.redirect("http://127.0.0.1:5000/shortening", code=302)
-
-
-@app.route("/shortening")
-def url_short():
-    """Render template form to submit url to shorten it"""
+@app.route("/", methods=['GET', 'POST'])
+def main():
+    if flask.request.method == 'POST':
+        long_url = flask.request.form['long_url']
+        if uri_validator(long_url):
+            db = get_db()
+            cursor = db.cursor()
+            cursor.execute("SELECT short_url FROM urls WHERE long_url = ?", (long_url,))
+            result = cursor.fetchone()
+            if result:
+                short_url = result[0]
+            else:
+                short_url = get_random_string()
+                cursor.execute("INSERT INTO urls (short_url, long_url) VALUES (?, ?)", (short_url, long_url))
+                db.commit()
+            cursor.close()
+            return flask.render_template("form.html", short_url=short_url)
+        else:
+            return flask.render_template("form.html", msg="Please provide a valid URL")
     return flask.render_template("form.html")
 
 
-@app.route("/shortening", methods=["POST"])
-def my_form_post():
-    """Process given url address"""
-    if flask.request.method == "POST":
-        try:
-            web_address = flask.request.form["http_address"]
-            if uri_validator(web_address):
-                shortened = get_random_string(5)
-                with sql.connect("database.db") as con:
-                    cur = con.cursor()
-                    sqlite_insert_with_params = """INSERT INTO urls 
-                    (original, shortened) VALUES(?, ?)"""
-
-                    cur.execute(sqlite_insert_with_params, (web_address, shortened))
-                    con.commit()
-                    msg = "Record successfully added"
-                    print(msg)
-                return "http://127.0.0.1:5000/" + shortened
-            else:
-                # TODO Add new template to show this message and to resubmit another url
-                return "Please provide valid url"
-        except:
-            con.rollback()
-            return "Error in insert operation"
-        finally:
-            con.close()
-
-
-@app.route("/<shortened_url>")
-def landing_page(shortened_url):
-    try:
-        with sql.connect("database.db") as con:
-            cur = con.cursor()
-            query_to_search = """SELECT original FROM urls 
-            WHERE shortened LIKE (?);"""
-            cur.execute(query_to_search, [shortened_url])
-            result = cur.fetchone()
-            return flask.redirect(result[0], code=302)
-
-    except:
-        con.rollback()
-        return "Error in insert operation"
-    finally:
-        con.close()
+@app.route("/<short_url>")
+def short_url_page(short_url):
+    db = get_db()
+    cursor = db.cursor()
+    cursor.execute("SELECT long_url FROM urls WHERE short_url = ?", (short_url,))
+    result = cursor.fetchone()
+    cursor.close()
+    if result:
+        long_url = result[0]
+        return flask.redirect(long_url)
+    return "Invalid URL"
 
 
 if __name__ == "__main__":
-    app.debug = 1
-    app.run()
+    app.teardown_appcontext(close_db)
+    app.run(debug=True)
