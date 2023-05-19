@@ -81,4 +81,4 @@ def short_url_page(short_url):
 
 if __name__ == "__main__":
     app.teardown_appcontext(close_db)
-    app.run(debug=True)
+    app.run(host='0.0.0.0', debug=True)
